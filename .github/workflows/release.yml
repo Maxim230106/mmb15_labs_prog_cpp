@@ -6,14 +6,14 @@ on:
 
 jobs:
   create_release:
-    name: create_release_job
+    name: Create Release
     runs-on: windows-latest
     permissions: write-all
     outputs:
       release: ${{ steps.create_release.outputs.upload_url }}
 
     steps:
-      - name: create_release_step
+      - name: Create Release
         id: create_release
         uses: actions/create-release@v1
         env:
@@ -25,7 +25,7 @@ jobs:
           prerelease: false
 
   build_ubuntu:
-    name: build_ubuntu_job
+    name: Build for Ubuntu
     runs-on: ubuntu-latest
     permissions: write-all
     needs: create_release
@@ -48,3 +48,35 @@ jobs:
           asset_path: ./helloworld-0.0.${{ github.run_number }}-Linux.deb
           asset_name: helloworld-0.0.${{ github.run_number }}-Linux.deb
           asset_content_type: application/vnd.debian.binary-package
+
+  build_windows:
+    name: Build for Windows
+    runs-on: windows-latest
+    permissions: write-all
+    needs: create_release
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install vcpkg and dependencies
+        run: |
+          git clone https://github.com/Microsoft/vcpkg.git
+          .\vcpkg\bootstrap-vcpkg.bat
+          .\vcpkg\vcpkg install boost-test
+
+      - name: Configure CMake
+        run: cmake -B build -DPATCH_VERSION=${{ github.run_number }} -DCMAKE_TOOLCHAIN_FILE="vcpkg/scripts/buildsystems/vcpkg.cmake"
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Upload Release Asset
+        id: upload-release-asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create_release.outputs.release }}
+          asset_path: ./helloworld-0.0.${{ github.run_number }}-Windows.zip
+          asset_name: helloworld-0.0.${{ github.run_number }}-Windows.zip
+          asset_content_type: application/vnd.windows.binary-package
