@@ -25,27 +25,6 @@ jobs:
           draft: false
           prerelease: false
 
-  build-windows:
-    needs: create_release
-    runs-on: windows-latest
-    permissions: write-all
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          submodules: true
-      - run: cmake . -DPATCH_VERSION=${{ github.run_number }}
-      - run: cmake --build .
-      - name: Upload Release Asset
-        id: upload-release-asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.create_release.outputs.release }}
-          asset_path: ./helloworld.exe
-          asset_name: helloworld.exe
-          asset_content_type: application/vnd.windows.binary-package
-
   build-ubuntu:
     needs: create_release
     runs-on: ubuntu-latest
@@ -67,3 +46,38 @@ jobs:
           asset_path: ./helloworld.deb
           asset_name: helloworld.deb
           asset_content_type: application/vnd.debian.binary-package
+
+  build-windows:
+    runs-on: windows-latest
+    permissions: write-all
+    needs: create_release
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Boost via Chocolatey
+        run: choco install boost -y
+
+      - name: Configure CMake
+        run: |
+          mkdir build
+          cd build
+          cmake .. -DBOOST_ROOT="C:/local/boost_1_83_0"
+
+      - name: Build
+        run: |
+          cmake . -DPATCH_VERSION=${{ github.run_number }}
+          cd build
+          cmake --build . --config Release
+
+      - name: Upload Release Asset
+        id: upload-release-asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create_release.outputs.release }}
+          asset_path: ./helloworld.exe
+          asset_name: helloworld.exe
+          asset_content_type: application/vnd.windows.binary-package
