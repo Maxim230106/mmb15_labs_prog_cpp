@@ -3,19 +3,23 @@ name: 'C++ CI'
 on:
   push:
     branches:
-      - lab_01
+      - main
+      - feature/github_actions
 
 jobs:
-
-  create_release:
-    name: create_release
-    runs-on: windows-latest
-    outputs:
-      release: ${{ steps.create_release.outputs.upload_url }}
+  build:
+    runs-on: ubuntu-latest
     permissions: write-all
-
     steps:
-      - name: create_release
+      - uses: actions/checkout@v3
+        with:
+          submodules: true
+      - run: sudo apt-get update && sudo apt-get install libboost-test-dev -y
+      - run: cmake . -DPATCH_VERSION=${{ github.run_number }}
+      - run: cmake --build .
+      - run: cmake --build . --target test
+      - run: cmake --build . --target package
+      - name: Create Release
         id: create_release
         uses: actions/create-release@v1
         env:
@@ -25,55 +29,13 @@ jobs:
           release_name: Release ${{ github.run_number }}
           draft: false
           prerelease: false
-
-  build-ubuntu:
-    needs: create_release
-    runs-on: ubuntu-latest
-    permissions: write-all
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          submodules: true
-      - run: sudo apt-get update && sudo apt-get install libboost-test-dev -y
-      - run: cmake . -DPATCH_VERSION=${{ github.run_number }}
-      - name: Create build
-        run: cmake --build .
-      #- name: Make pkg
-      #  run: cmake --build . --target package
       - name: Upload Release Asset
         id: upload-release-asset
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          upload_url: ${{ needs.create_release.outputs.release }}
-          asset_path: ./helloworld.deb
-          asset_name: helloworld.deb
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./helloworld-0.0.${{ github.run_number }}-Linux.deb
+          asset_name: helloworld-0.0.${{ github.run_number }}-Linux.deb
           asset_content_type: application/vnd.debian.binary-package
-
-#  build-windows:
-#    runs-on: windows-latest
-#    permissions: write-all
-#    needs: create_release
-#
-#    steps:
-#      - name: Checkout repository
-#        uses: actions/checkout@v4
-#
-#      - name: Install vcpkg and dependencies
-#        run: |
-#          git clone https://github.com/Microsoft/vcpkg.git
-#          .\vcpkg\bootstrap-vcpkg.bat
-#          .\vcpkg\vcpkg install boost-test
-#
-#      - name: Configure CMake
-#        run: cmake -B build -DPATCH_VERSION=${{ github.run_number }} -DCMAKE_TOOLCHAIN_FILE="vcpkg/scripts/buildsystems/vcpkg.cmake"
-#
-#      - name: Build
-#        run: cmake --build build --config Release
-#
-#      - name: Upload Windows Artifact
-#        uses: actions/upload-artifact@v4
-#        with:
-#          name: windows-package
-#          path: build/Release/helloworld.exe
