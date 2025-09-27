@@ -6,6 +6,7 @@ on:
       - lab_01
 
 jobs:
+
   create_release:
     name: create_release
     runs-on: windows-latest
@@ -43,7 +44,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ needs.create_release.outputs.release }}
-          asset_path: ./helloworld.deb
+          asset_path: ./build/helloworld.deb
           asset_name: helloworld.deb
           asset_content_type: application/vnd.debian.binary-package
 
@@ -56,28 +57,20 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install Boost via Chocolatey
-        run: choco install boost -y
+      - name: Install vcpkg and dependencies
+        run: |
+          git clone https://github.com/Microsoft/vcpkg.git
+          .\vcpkg\bootstrap-vcpkg.bat
+          .\vcpkg\vcpkg install boost-test
 
       - name: Configure CMake
-        run: |
-          mkdir build
-          cd build
-          cmake .. -DBOOST_ROOT="C:/local/boost_1_83_0"
+        run: cmake -B build -DPATCH_VERSION=${{ github.run_number }} -DCMAKE_TOOLCHAIN_FILE="vcpkg/scripts/buildsystems/vcpkg.cmake"
 
       - name: Build
-        run: |
-          cmake . -DPATCH_VERSION=${{ github.run_number }}
-          cd build
-          cmake --build . --config Release
+        run: cmake --build build --config Release
 
-      - name: Upload Release Asset
-        id: upload-release-asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload Windows Artifact
+        uses: actions/upload-artifact@v4
         with:
-          upload_url: ${{ needs.create_release.outputs.release }}
-          asset_path: ./helloworld.exe
-          asset_name: helloworld.exe
-          asset_content_type: application/vnd.windows.binary-package
+          name: windows-package
+          path: build/Release/helloworld.exe
