@@ -70,8 +70,10 @@ jobs:
       - name: Build
         run: cmake --build build --config Release
 
-      - name: Package (CPack)
-        run: cmake --build build --config Release --target package
+      - name: Run CPack directly
+        run: |
+          cd build
+          cpack -C Release
 
       - name: Upload Release Asset
         id: upload-release-asset
@@ -82,4 +84,4 @@ jobs:
           upload_url: ${{ needs.create_release.outputs.release }}
           asset_path: ./build/helloworld-0.0.${{ github.run_number }}-Windows.zip
           asset_name: helloworld-0.0.${{ github.run_number }}-Windows.zip
-          asset_content_type: application/vnd.windows.binary-package
+          asset_content_type: application/zip

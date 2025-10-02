@@ -71,6 +71,8 @@ set(CPACK_PACKAGE_VERSION_PATCH "${PROJECT_VERSION_PATCH}")
 
 set(CPACK_PACKAGE_CONTACT example@example.com)
 
+set(CPACK_PACKAGE_FILE_NAME "helloworld-0.0.${PROJECT_VERSION_PATCH}-Windows")
+set(CPACK_GENERATOR "ZIP")
 include(CPack)
 
 enable_testing()
