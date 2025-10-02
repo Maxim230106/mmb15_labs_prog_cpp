@@ -2,7 +2,7 @@ name: 'C++ CI'
 
 on:
   push:
-    branches: lab_01
+    branches: [ lab_01 ]
 
 jobs:
   create_release:
@@ -30,23 +30,45 @@ jobs:
     permissions: write-all
     needs: create_release
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v3
         with:
           submodules: true
-      - run: sudo apt-get update && sudo apt-get install libboost-test-dev -y
-      - run: cmake . -DPATCH_VERSION=${{ github.run_number }}
-      - run: cmake --build .
-      - run: cmake --build . --target test
-      - run: cmake --build . --target package
+
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install libboost-test-dev -y
+
+      - name: Configure (out-of-source)
+        run: cmake -S . -B build -DPATCH_VERSION=${{ github.run_number }}
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Test
+        run: cmake --build build --config Release --target test
+
+      - name: Package (CPack)
+        run: cmake --build build --config Release --target package
+
+      - name: List build dir (debug)
+        run: ls -la build || true
+
+      - name: Find package file
+        id: find_pkg
+        run: |
+          pkg=$(find build -type f -name '*.deb' | head -n 1)
+          if [ -z "$pkg" ]; then echo "No .deb found in build/"; ls -la build; exit 1; fi
+          echo "asset=$pkg" >> $GITHUB_OUTPUT
+          echo "name=$(basename $pkg)" >> $GITHUB_OUTPUT
+
       - name: Upload Release Asset
-        id: upload-release-asset
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ needs.create_release.outputs.release }}
-          asset_path: ./helloworld-0.0.${{ github.run_number }}-Linux.deb
-          asset_name: helloworld-0.0.${{ github.run_number }}-Linux.deb
+          asset_path: ${{ steps.find_pkg.outputs.asset }}
+          asset_name: ${{ steps.find_pkg.outputs.name }}
           asset_content_type: application/vnd.debian.binary-package
 
   build_windows:
@@ -64,24 +86,37 @@ jobs:
           .\vcpkg\bootstrap-vcpkg.bat
           .\vcpkg\vcpkg install boost-test
 
-      - name: Configure CMake
-        run: cmake -B build -DPATCH_VERSION=${{ github.run_number }} -DCMAKE_TOOLCHAIN_FILE="vcpkg/scripts/buildsystems/vcpkg.cmake"
+      - name: Configure CMake (out-of-source)
+        run: cmake -S . -B build -DPATCH_VERSION=${{ github.run_number }} -DCMAKE_TOOLCHAIN_FILE="vcpkg/scripts/buildsystems/vcpkg.cmake"
 
       - name: Build
         run: cmake --build build --config Release
 
-      - name: Run CPack directly
+      - name: Package (CPack)
+        shell: powershell
         run: |
-          cd build
+          pushd build
           cpack -C Release
+          popd
+
+      - name: List build dir (debug)
+        run: dir build
+
+      - name: Find zip package
+        id: find_zip
+        shell: powershell
+        run: |
+          $zip = Get-ChildItem -Path build -Filter *.zip -Recurse | Select-Object -First 1
+          if (-not $zip) { Write-Error "No zip found in build/"; exit 1 }
+          echo "asset=$($zip.FullName)" >> $env:GITHUB_OUTPUT
+          echo "name=$($zip.Name)" >> $env:GITHUB_OUTPUT
 
       - name: Upload Release Asset
-        id: upload-release-asset
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ needs.create_release.outputs.release }}
-          asset_path: ./build/helloworld-0.0.${{ github.run_number }}-Windows.zip
-          asset_name: helloworld-0.0.${{ github.run_number }}-Windows.zip
+          asset_path: ${{ steps.find_zip.outputs.asset }}
+          asset_name: ${{ steps.find_zip.outputs.name }}
           asset_content_type: application/zip
