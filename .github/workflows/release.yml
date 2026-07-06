@@ -80,16 +80,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install vcpkg and Boost headers
+      - name: Install vcpkg and dependencies
         shell: pwsh
         run: |
-          git clone https://github.com/microsoft/vcpkg.git
+          git clone https://github.com/microsoft/vcpkg.git "$env:GITHUB_WORKSPACE\vcpkg"
           .\vcpkg\bootstrap-vcpkg.bat
-          .\vcpkg\vcpkg install boost-test
+          .\vcpkg\vcpkg install boost-test:x64-windows
 
       - name: Configure
         shell: pwsh
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=vcpkg/scripts/buildsystems/vcpkg.cmake
+        run: |
+          $vcpkgRoot = "$env:GITHUB_WORKSPACE\vcpkg"
+          cmake -S . -B build `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DCMAKE_TOOLCHAIN_FILE="$vcpkgRoot\scripts\buildsystems\vcpkg.cmake" `
+            -DVCPKG_TARGET_TRIPLET=x64-windows
 
       - name: Build
         shell: pwsh
