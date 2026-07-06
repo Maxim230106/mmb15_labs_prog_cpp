@@ -1,0 +1,101 @@
+name: C++ CI
+
+on:
+  push:
+    branches: [ lab_02 ]
+  pull_request:
+    branches: [ lab_02 ]
+
+permissions:
+  contents: write
+
+jobs:
+  create_release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    outputs:
+      release_upload_url: ${{ steps.create_release.outputs.upload_url }}
+    steps:
+      - name: Create release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ github.run_number }}
+          release_name: Release v${{ github.run_number }}
+          draft: false
+          prerelease: false
+
+  build_ubuntu:
+    name: Build for Ubuntu
+    runs-on: ubuntu-latest
+    needs: create_release
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y cmake g++ libboost-dev
+
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --config Release --parallel
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure -C Release
+
+      - name: Package
+        run: cmake --build build --config Release --target package
+
+      - name: Find package file
+        id: find_pkg
+        run: |
+          pkg=$(find build -type f -name '*.tar.gz' | head -n 1)
+          if [ -z "$pkg" ]; then
+            echo "No package found"
+            ls -la build
+            exit 1
+          fi
+          echo "asset=$pkg" >> $GITHUB_OUTPUT
+          echo "name=$(basename "$pkg")" >> $GITHUB_OUTPUT
+
+      - name: Upload Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create_release.outputs.release_upload_url }}
+          asset_path: ${{ steps.find_pkg.outputs.asset }}
+          asset_name: ${{ steps.find_pkg.outputs.name }}
+          asset_content_type: application/gzip
+
+  build_windows:
+    name: Build for Windows
+    runs-on: windows-latest
+    permissions: write-all
+    needs: create_release
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install vcpkg and dependencies
+        shell: powershell
+        run: |
+          git clone https://github.com/Microsoft/vcpkg.git $env:GITHUB_WORKSPACE\vcpkg
+          .\vcpkg\bootstrap-vcpkg.bat
+          .\vcpkg\vcpkg install boost-test:x64-windows
+
+      - name: Configure CMake (out-of-source)
+        shell: powershell
+        run: |
+          cmake -S . -B build `
+            -DPATCH_VERSION=${{ github.run_number }} `
+            -DCMAKE_TOOLCHAIN_FILE="$env:GITHUB_WORKSPACE\vcpkg\scripts\buildsystems\vcpkg.cmake" `
+            -DVCPKG_TARGET_TRIPLET=x64-windows
+
+      - name: Build
+        shell: powershell
+        run: cmake --build build --config Release
