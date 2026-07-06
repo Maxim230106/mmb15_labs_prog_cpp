@@ -4,9 +4,12 @@ project(ip_filter VERSION 0.1.0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+find_package(Boost REQUIRED COMPONENTS unit_test_framework)
+
 add_executable(ip_filter ip_filter.cpp)
 add_executable(ip_filter_tests tests.cpp ip_filter.cpp)
-target_compile_definitions(ip_filter_tests PRIVATE IP_FILTER_NO_MAIN)
+target_compile_definitions(ip_filter_tests PRIVATE IP_FILTER_NO_MAIN BOOST_TEST_DYN_LINK)
+target_link_libraries(ip_filter_tests PRIVATE Boost::unit_test_framework)
 
 function(set_project_warnings target)
     if (MSVC)
