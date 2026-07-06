@@ -75,27 +75,53 @@ jobs:
   build_windows:
     name: Build for Windows
     runs-on: windows-latest
-    permissions: write-all
     needs: create_release
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install vcpkg and dependencies
-        shell: powershell
+      - name: Install vcpkg and Boost headers
+        shell: pwsh
         run: |
-          git clone https://github.com/Microsoft/vcpkg.git $env:GITHUB_WORKSPACE\vcpkg
+          git clone https://github.com/microsoft/vcpkg.git
           .\vcpkg\bootstrap-vcpkg.bat
-          .\vcpkg\vcpkg install boost-test:x64-windows
+          .\vcpkg\vcpkg install boost-test
 
-      - name: Configure CMake (out-of-source)
-        shell: powershell
-        run: |
-          cmake -S . -B build `
-            -DPATCH_VERSION=${{ github.run_number }} `
-            -DCMAKE_TOOLCHAIN_FILE="$env:GITHUB_WORKSPACE\vcpkg\scripts\buildsystems\vcpkg.cmake" `
-            -DVCPKG_TARGET_TRIPLET=x64-windows
+      - name: Configure
+        shell: pwsh
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=vcpkg/scripts/buildsystems/vcpkg.cmake
 
       - name: Build
-        shell: powershell
-        run: cmake --build build --config Release
+        shell: pwsh
+        run: cmake --build build --config Release --parallel
+
+      - name: Test
+        shell: pwsh
+        run: ctest --test-dir build --output-on-failure -C Release
+
+      - name: Package
+        shell: pwsh
+        run: cmake --build build --config Release --target package
+
+      - name: Find package file
+        id: find_pkg
+        shell: pwsh
+        run: |
+          $pkg = Get-ChildItem -Path build -Recurse -Filter *.zip | Select-Object -First 1
+          if (-not $pkg) {
+            Write-Error "No package found"
+            Get-ChildItem build -Recurse
+            exit 1
+          }
+          "asset=$($pkg.FullName)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "name=$($pkg.Name)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Upload Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create_release.outputs.release_upload_url }}
+          asset_path: ${{ steps.find_pkg.outputs.asset }}
+          asset_name: ${{ steps.find_pkg.outputs.name }}
+          asset_content_type: application/zip
