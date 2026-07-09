@@ -2,7 +2,7 @@ name: release
 
 on:
   push:
-    branches: [ master, lab_02 ]
+    branches: [ lab_02 ]
   workflow_dispatch:
 
 permissions:
@@ -53,6 +53,9 @@ jobs:
     needs: build-test-package
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Download packages
         uses: actions/download-artifact@v4
         with:
@@ -61,6 +64,7 @@ jobs:
       - name: Publish release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
           RELEASE_TAG: lab-02-${{ github.run_number }}
         run: |
           mapfile -t files < <(find artifacts -type f \( -name '*.zip' -o -name '*.tar.gz' \))
