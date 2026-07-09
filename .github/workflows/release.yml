@@ -2,7 +2,7 @@ name: release
 
 on:
   push:
-    branches: [ lab_02 ]
+    branches: [ master, lab_02 ]
   workflow_dispatch:
 
 permissions:
@@ -18,10 +18,10 @@ jobs:
         include:
           - name: Ubuntu
             os: ubuntu-latest
-            package_glob: build/*.tar.gz
+            package_glob: build/**/*.tar.gz
           - name: Windows
             os: windows-latest
-            package_glob: build/*.zip
+            package_glob: build/**/*.zip
 
     steps:
       - name: Checkout
@@ -37,7 +37,8 @@ jobs:
         run: ctest --test-dir build --build-config Release --output-on-failure
 
       - name: Package
-        run: cpack --config build/CPackConfig.cmake
+        working-directory: build
+        run: cpack -C Release
 
       - name: Upload package
         uses: actions/upload-artifact@v4
