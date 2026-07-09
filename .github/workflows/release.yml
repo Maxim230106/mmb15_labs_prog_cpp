@@ -75,11 +75,24 @@ jobs:
           fi
 
           if gh release view "$RELEASE_TAG" > /dev/null 2>&1; then
-            gh release upload "$RELEASE_TAG" "${files[@]}" --clobber
-            gh release edit "$RELEASE_TAG" --title "Release ${{ github.run_number }}"
+            gh release edit "$RELEASE_TAG" \
+              --title "Release ${{ github.run_number }}" \
+              --latest=false
           else
-            gh release create "$RELEASE_TAG" "${files[@]}" \
+            gh release create "$RELEASE_TAG" \
               --target "${{ github.sha }}" \
               --title "Release ${{ github.run_number }}" \
               --generate-notes
           fi
+
+          for attempt in 1 2 3; do
+            if gh release upload "$RELEASE_TAG" "${files[@]}" --clobber; then
+              exit 0
+            fi
+
+            echo "Upload attempt $attempt failed, retrying..."
+            sleep 5
+          done
+
+          echo "Failed to upload release assets."
+          exit 1
