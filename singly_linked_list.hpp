@@ -1,38 +1,44 @@
 #pragma once
 
-#include <cstddef>   // std::size_t
-#include <stdexcept> // std::out_of_range
-#include <utility>   // std::move
+#include <cstddef>
+#include <memory>
+#include <stdexcept>
+#include <type_traits>
+#include <utility>
 
-template<typename T>
+template<typename T, typename Alloc = std::allocator<T>>
 class SinglyLinkedList {
 private:
     struct Node {
-        T data;     // Значение, которое хранит узел
-        Node* next; // Указатель на следующий узел
+        T data;
+        Node* next;
 
-        Node(const T& value)
-            : data(value), next(nullptr) {
-        }
-
-        Node(T&& value)
-            : data(std::move(value)), next(nullptr) {
+        template<typename U>
+        explicit Node(U&& value)
+            : data(std::forward<U>(value)), next(nullptr) {
         }
     };
 
-    Node* head_;       // Первый узел списка
-    Node* tail_;       // Последний узел списка для быстрого push_back
-    std::size_t size_; // Количество элементов в списке
+    using NodeAllocator = typename std::allocator_traits<Alloc>::template rebind_alloc<Node>;
+    using NodeAllocatorTraits = std::allocator_traits<NodeAllocator>;
 
-    // Освобождает все узлы и делает список пустым
+    Node* head_;
+    Node* tail_;
+    std::size_t size_;
+    NodeAllocator allocator_;
+
     void clear();
-    // Возвращает указатель на узел по индексу
     Node* node_at(std::size_t index) const;
+
+    template<typename U>
+    Node* create_node(U&& value);
+
+    void destroy_node(Node* node) noexcept;
 
 public:
     class Iterator {
     private:
-        Node* current_; // Узел, на который сейчас смотрит итератор
+        Node* current_;
 
     public:
         explicit Iterator(Node* node)
@@ -48,10 +54,6 @@ public:
             return *this;
         }
 
-        Node* get() const {
-            return current_;
-        }
-
         bool operator!=(const Iterator& other) const {
             return current_ != other.current_;
         }
@@ -63,7 +65,7 @@ public:
 
     class ConstIterator {
     private:
-        const Node* current_; // Узел, на который смотрит константный итератор
+        const Node* current_;
 
     public:
         explicit ConstIterator(const Node* node)
@@ -79,10 +81,6 @@ public:
             return *this;
         }
 
-        const Node* get() const {
-            return current_;
-        }
-
         bool operator!=(const ConstIterator& other) const {
             return current_ != other.current_;
         }
@@ -92,44 +90,29 @@ public:
         }
     };
 
-    // Создает пустой список
     SinglyLinkedList();
-    // Создает независимую копию другого списка
+    explicit SinglyLinkedList(const Alloc& allocator);
     SinglyLinkedList(const SinglyLinkedList& other);
-    // Забирает ресурсы у временного списка
     SinglyLinkedList(SinglyLinkedList&& other) noexcept;
 
-    // Полностью заменяет содержимое текущего списка копией other
     SinglyLinkedList& operator=(const SinglyLinkedList& other);
-    // Передает владение узлами от временного списка текущему
     SinglyLinkedList& operator=(SinglyLinkedList&& other) noexcept;
 
-    // Освобождает все узлы списка
     ~SinglyLinkedList();
 
-    // Добавляет элемент в конец списка по копии
     void push_back(const T& value);
-    // Добавляет элемент в конец списка с перемещением
     void push_back(T&& value);
 
-    // Вставляет элемент в указанную позицию
     void insert(std::size_t index, const T& value);
-    // Вставляет элемент в указанную позицию с перемещением
     void insert(std::size_t index, T&& value);
-    // Удаляет элемент по индексу
     void erase(std::size_t index);
 
-    // Возвращает текущее число элементов
     std::size_t size() const;
-    // Проверяет, пуст ли список
     bool empty() const;
 
-    // Доступ к элементу по индексу
     T& operator[](std::size_t index);
-    // Константный доступ к элементу по индексу
     const T& operator[](std::size_t index) const;
 
-    // Итераторы для обхода списка
     Iterator begin();
     Iterator end();
 
@@ -137,29 +120,40 @@ public:
     ConstIterator end() const;
 };
 
-template<typename T>
-SinglyLinkedList<T>::SinglyLinkedList()
-    : head_(nullptr), tail_(nullptr), size_(0) {
+template<typename T, typename Alloc>
+SinglyLinkedList<T, Alloc>::SinglyLinkedList()
+    : SinglyLinkedList(Alloc()) {
 }
 
-template<typename T>
-SinglyLinkedList<T>::SinglyLinkedList(const SinglyLinkedList& other)
-    : head_(nullptr), tail_(nullptr), size_(0) {
+template<typename T, typename Alloc>
+SinglyLinkedList<T, Alloc>::SinglyLinkedList(const Alloc& allocator)
+    : head_(nullptr), tail_(nullptr), size_(0), allocator_(allocator) {
+}
+
+template<typename T, typename Alloc>
+SinglyLinkedList<T, Alloc>::SinglyLinkedList(const SinglyLinkedList& other)
+    : head_(nullptr),
+      tail_(nullptr),
+      size_(0),
+      allocator_(NodeAllocatorTraits::select_on_container_copy_construction(other.allocator_)) {
     for (const T& value : other) {
         push_back(value);
     }
 }
 
-template<typename T>
-SinglyLinkedList<T>::SinglyLinkedList(SinglyLinkedList&& other) noexcept
-    : head_(other.head_), tail_(other.tail_), size_(other.size_) {
+template<typename T, typename Alloc>
+SinglyLinkedList<T, Alloc>::SinglyLinkedList(SinglyLinkedList&& other) noexcept
+    : head_(other.head_),
+      tail_(other.tail_),
+      size_(other.size_),
+      allocator_(std::move(other.allocator_)) {
     other.head_ = nullptr;
     other.tail_ = nullptr;
     other.size_ = 0;
 }
 
-template<typename T>
-SinglyLinkedList<T>& SinglyLinkedList<T>::operator=(const SinglyLinkedList& other) {
+template<typename T, typename Alloc>
+SinglyLinkedList<T, Alloc>& SinglyLinkedList<T, Alloc>::operator=(const SinglyLinkedList& other) {
     if (this == &other) {
         return *this;
     }
@@ -170,14 +164,14 @@ SinglyLinkedList<T>& SinglyLinkedList<T>::operator=(const SinglyLinkedList& othe
     return *this;
 }
 
-template<typename T>
-SinglyLinkedList<T>& SinglyLinkedList<T>::operator=(SinglyLinkedList&& other) noexcept {
+template<typename T, typename Alloc>
+SinglyLinkedList<T, Alloc>& SinglyLinkedList<T, Alloc>::operator=(SinglyLinkedList&& other) noexcept {
     if (this == &other) {
         return *this;
     }
 
     clear();
-
+    allocator_ = std::move(other.allocator_);
     head_ = other.head_;
     tail_ = other.tail_;
     size_ = other.size_;
@@ -189,18 +183,18 @@ SinglyLinkedList<T>& SinglyLinkedList<T>::operator=(SinglyLinkedList&& other) no
     return *this;
 }
 
-template<typename T>
-SinglyLinkedList<T>::~SinglyLinkedList() {
+template<typename T, typename Alloc>
+SinglyLinkedList<T, Alloc>::~SinglyLinkedList() {
     clear();
 }
 
-template<typename T>
-void SinglyLinkedList<T>::clear() {
+template<typename T, typename Alloc>
+void SinglyLinkedList<T, Alloc>::clear() {
     Node* current = head_;
 
     while (current != nullptr) {
         Node* next = current->next;
-        delete current;
+        destroy_node(current);
         current = next;
     }
 
@@ -209,8 +203,8 @@ void SinglyLinkedList<T>::clear() {
     size_ = 0;
 }
 
-template<typename T>
-typename SinglyLinkedList<T>::Node* SinglyLinkedList<T>::node_at(std::size_t index) const {
+template<typename T, typename Alloc>
+typename SinglyLinkedList<T, Alloc>::Node* SinglyLinkedList<T, Alloc>::node_at(std::size_t index) const {
     if (index >= size_) {
         throw std::out_of_range("SinglyLinkedList index is out of range");
     }
@@ -224,9 +218,30 @@ typename SinglyLinkedList<T>::Node* SinglyLinkedList<T>::node_at(std::size_t ind
     return current;
 }
 
-template<typename T>
-void SinglyLinkedList<T>::push_back(const T& value) {
-    Node* new_node = new Node(value);
+template<typename T, typename Alloc>
+template<typename U>
+typename SinglyLinkedList<T, Alloc>::Node* SinglyLinkedList<T, Alloc>::create_node(U&& value) {
+    Node* node = NodeAllocatorTraits::allocate(allocator_, 1);
+
+    try {
+        NodeAllocatorTraits::construct(allocator_, node, std::forward<U>(value));
+    } catch (...) {
+        NodeAllocatorTraits::deallocate(allocator_, node, 1);
+        throw;
+    }
+
+    return node;
+}
+
+template<typename T, typename Alloc>
+void SinglyLinkedList<T, Alloc>::destroy_node(Node* node) noexcept {
+    NodeAllocatorTraits::destroy(allocator_, node);
+    NodeAllocatorTraits::deallocate(allocator_, node, 1);
+}
+
+template<typename T, typename Alloc>
+void SinglyLinkedList<T, Alloc>::push_back(const T& value) {
+    Node* new_node = create_node(value);
 
     if (tail_ == nullptr) {
         head_ = new_node;
@@ -239,9 +254,9 @@ void SinglyLinkedList<T>::push_back(const T& value) {
     ++size_;
 }
 
-template<typename T>
-void SinglyLinkedList<T>::push_back(T&& value) {
-    Node* new_node = new Node(std::move(value));
+template<typename T, typename Alloc>
+void SinglyLinkedList<T, Alloc>::push_back(T&& value) {
+    Node* new_node = create_node(std::move(value));
 
     if (tail_ == nullptr) {
         head_ = new_node;
@@ -254,8 +269,8 @@ void SinglyLinkedList<T>::push_back(T&& value) {
     ++size_;
 }
 
-template<typename T>
-void SinglyLinkedList<T>::insert(std::size_t index, const T& value) {
+template<typename T, typename Alloc>
+void SinglyLinkedList<T, Alloc>::insert(std::size_t index, const T& value) {
     if (index > size_) {
         throw std::out_of_range("SinglyLinkedList insert index is out of range");
     }
@@ -265,7 +280,7 @@ void SinglyLinkedList<T>::insert(std::size_t index, const T& value) {
         return;
     }
 
-    Node* new_node = new Node(value);
+    Node* new_node = create_node(value);
 
     if (index == 0) {
         new_node->next = head_;
@@ -286,8 +301,8 @@ void SinglyLinkedList<T>::insert(std::size_t index, const T& value) {
     ++size_;
 }
 
-template<typename T>
-void SinglyLinkedList<T>::insert(std::size_t index, T&& value) {
+template<typename T, typename Alloc>
+void SinglyLinkedList<T, Alloc>::insert(std::size_t index, T&& value) {
     if (index > size_) {
         throw std::out_of_range("SinglyLinkedList insert index is out of range");
     }
@@ -297,7 +312,7 @@ void SinglyLinkedList<T>::insert(std::size_t index, T&& value) {
         return;
     }
 
-    Node* new_node = new Node(std::move(value));
+    Node* new_node = create_node(std::move(value));
 
     if (index == 0) {
         new_node->next = head_;
@@ -318,8 +333,8 @@ void SinglyLinkedList<T>::insert(std::size_t index, T&& value) {
     ++size_;
 }
 
-template<typename T>
-void SinglyLinkedList<T>::erase(std::size_t index) {
+template<typename T, typename Alloc>
+void SinglyLinkedList<T, Alloc>::erase(std::size_t index) {
     if (index >= size_) {
         throw std::out_of_range("SinglyLinkedList erase index is out of range");
     }
@@ -343,46 +358,46 @@ void SinglyLinkedList<T>::erase(std::size_t index) {
         }
     }
 
-    delete target;
+    destroy_node(target);
     --size_;
 }
 
-template<typename T>
-std::size_t SinglyLinkedList<T>::size() const {
+template<typename T, typename Alloc>
+std::size_t SinglyLinkedList<T, Alloc>::size() const {
     return size_;
 }
 
-template<typename T>
-bool SinglyLinkedList<T>::empty() const {
+template<typename T, typename Alloc>
+bool SinglyLinkedList<T, Alloc>::empty() const {
     return size_ == 0;
 }
 
-template<typename T>
-T& SinglyLinkedList<T>::operator[](std::size_t index) {
+template<typename T, typename Alloc>
+T& SinglyLinkedList<T, Alloc>::operator[](std::size_t index) {
     return node_at(index)->data;
 }
 
-template<typename T>
-const T& SinglyLinkedList<T>::operator[](std::size_t index) const {
+template<typename T, typename Alloc>
+const T& SinglyLinkedList<T, Alloc>::operator[](std::size_t index) const {
     return node_at(index)->data;
 }
 
-template<typename T>
-typename SinglyLinkedList<T>::Iterator SinglyLinkedList<T>::begin() {
+template<typename T, typename Alloc>
+typename SinglyLinkedList<T, Alloc>::Iterator SinglyLinkedList<T, Alloc>::begin() {
     return Iterator(head_);
 }
 
-template<typename T>
-typename SinglyLinkedList<T>::Iterator SinglyLinkedList<T>::end() {
+template<typename T, typename Alloc>
+typename SinglyLinkedList<T, Alloc>::Iterator SinglyLinkedList<T, Alloc>::end() {
     return Iterator(nullptr);
 }
 
-template<typename T>
-typename SinglyLinkedList<T>::ConstIterator SinglyLinkedList<T>::begin() const {
+template<typename T, typename Alloc>
+typename SinglyLinkedList<T, Alloc>::ConstIterator SinglyLinkedList<T, Alloc>::begin() const {
     return ConstIterator(head_);
 }
 
-template<typename T>
-typename SinglyLinkedList<T>::ConstIterator SinglyLinkedList<T>::end() const {
+template<typename T, typename Alloc>
+typename SinglyLinkedList<T, Alloc>::ConstIterator SinglyLinkedList<T, Alloc>::end() const {
     return ConstIterator(nullptr);
 }

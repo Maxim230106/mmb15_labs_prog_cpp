@@ -3,14 +3,14 @@ name: release
 on:
   push:
     branches:
-      - lab_03
+      - lab_04
   workflow_dispatch:
 
 permissions:
   contents: write
 
 env:
-  RELEASE_TAG: lab-03-${{ github.run_number }}
+  RELEASE_TAG: lab-04-${{ github.run_number }}
 
 jobs:
   build-ubuntu:
@@ -30,14 +30,14 @@ jobs:
       - name: Prepare archive
         run: |
           mkdir -p dist
-          cp build/lab_03 dist/lab_03
-          tar -czf lab_03-ubuntu.tar.gz -C dist lab_03
+          cp build/lab_04 dist/lab_04
+          tar -czf lab_04-ubuntu.tar.gz -C dist lab_04
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: lab_03-ubuntu
-          path: lab_03-ubuntu.tar.gz
+          name: lab_04-ubuntu
+          path: lab_04-ubuntu.tar.gz
           if-no-files-found: error
 
   build-windows:
@@ -58,14 +58,14 @@ jobs:
         shell: powershell
         run: |
           New-Item -ItemType Directory -Force -Path dist | Out-Null
-          Copy-Item build\Release\lab_03.exe dist\lab_03.exe
-          Compress-Archive -Path dist\lab_03.exe -DestinationPath lab_03-windows.zip -Force
+          Copy-Item build\Release\lab_04.exe dist\lab_04.exe
+          Compress-Archive -Path dist\lab_04.exe -DestinationPath lab_04-windows.zip -Force
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: lab_03-windows
-          path: lab_03-windows.zip
+          name: lab_04-windows
+          path: lab_04-windows.zip
           if-no-files-found: error
 
   release:
@@ -79,13 +79,13 @@ jobs:
       - name: Download Ubuntu artifact
         uses: actions/download-artifact@v4
         with:
-          name: lab_03-ubuntu
+          name: lab_04-ubuntu
           path: artifacts
 
       - name: Download Windows artifact
         uses: actions/download-artifact@v4
         with:
-          name: lab_03-windows
+          name: lab_04-windows
           path: artifacts
 
       - name: Create GitHub release
@@ -94,12 +94,12 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           if gh release view "$RELEASE_TAG" > /dev/null 2>&1; then
-            gh release upload "$RELEASE_TAG" artifacts/lab_03-ubuntu.tar.gz artifacts/lab_03-windows.zip --clobber
+            gh release upload "$RELEASE_TAG" artifacts/lab_04-ubuntu.tar.gz artifacts/lab_04-windows.zip --clobber
           else
             gh release create "$RELEASE_TAG" \
               --target "${{ github.sha }}" \
-              --title "lab_03 release ${{ github.run_number }}" \
+              --title "lab_04 release ${{ github.run_number }}" \
               --generate-notes \
-              artifacts/lab_03-ubuntu.tar.gz \
-              artifacts/lab_03-windows.zip
+              artifacts/lab_04-ubuntu.tar.gz \
+              artifacts/lab_04-windows.zip
           fi

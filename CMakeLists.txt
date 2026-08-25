@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.10.0)
-project(lab_03 VERSION 0.1.0 LANGUAGES C CXX)
+project(lab_04 VERSION 0.1.0 LANGUAGES C CXX)
 
-add_executable(lab_03 main.cpp)
+add_executable(lab_04 main.cpp)
 
